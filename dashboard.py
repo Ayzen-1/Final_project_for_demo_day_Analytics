@@ -7,21 +7,24 @@ from dash.dependencies import Output, Input
 from datetime import datetime as dtime
 from etl import get_data
 import json
-import requests
 
+# Загрузка данных
 tab1_df = get_data('get_v_qual')
 tab2_df = get_data('get_v_top_product')
 tab3_df = get_data('get_v_top_sel')
 tab4_df = get_data('get_v_qual_cat')
 tab5_df = get_data('get_v_top_state')
 
+# Преобразование столбца timestamp в datetime
 tab3_df['timestamp'] = pd.to_datetime(tab3_df['timestamp'])
 
+# Определение минимальной и максимальной даты
 min_date = tab3_df['timestamp'].min()
 max_date = tab3_df['timestamp'].max()
 years = tab3_df['timestamp'].dt.year.unique().tolist()
 regions = tab3_df['region'].sort_values().unique().tolist()
 
+# Определение блоков интерфейса
 date_picker_block = dcc.DatePickerRange(
     id='date_prange',
     min_date_allowed=min_date,
@@ -51,10 +54,11 @@ dropdown_block = dcc.Dropdown(
     style={'margin-top': '20px', 'width': '50%'}
 )
 
-geojson_url = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson'
-response = requests.get(geojson_url)
-brazil_states_geojson = response.json()
+# Загрузка локального GeoJSON файла
+with open('brazil-states.geojson', 'r') as f:
+    brazil_states_geojson = json.load(f)
 
+# Определение дашборда
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
 
 app.layout = dbc.Container(
@@ -182,6 +186,7 @@ def update_table(start_date, end_date):
 
     filtered_df = tab3_df[(tab3_df['timestamp'] >= sdate) & (tab3_df['timestamp'] <= edate)]
 
+    # Преобразование DataFrame в таблицу Plotly
     table_fig = px.imshow(filtered_df.head(10), text_auto=True, title='Top 10 Entries')
 
     table_fig.update_layout(template='plotly_dark')
@@ -191,40 +196,31 @@ def update_table(start_date, end_date):
 
 @app.callback(
     Output('map_fig', 'figure'),
-    [Input('update_button', 'n_clicks')]
+    Input('update_button', 'n_clicks')
 )
 def update_map(n_clicks):
-    # Преобразуем данные для карты
-    filtered_df = tab5_df.groupby('seller_state', as_index=False).agg({'seller_count': 'sum'})
-    
-    fig = px.choropleth(
-        filtered_df,
+    # Создание карты с использованием данных о штатах Бразилии
+    map_fig = px.choropleth_mapbox(
+        tab5_df,
         geojson=brazil_states_geojson,
-        locations='seller_state',
-        featureidkey="properties.sigla",
-        color='seller_count',
-        title='Map of Brazil States',
-        color_continuous_scale=px.colors.sequential.Plasma,
-        scope='south america'
-    )
-    
-    fig.update_geos(
-        visible=False,
-        projection_type="mercator",
-        showcoastlines=True,
-        coastlinecolor="Black",
-        showland=True,
-        landcolor="LightGray",
-        fitbounds="locations"
-    )
-    
-    fig.update_layout(
-        template='plotly_dark',
-        margin={"r":0,"t":0,"l":0,"b":0},
-        paper_bgcolor='#0a0a0a' 
+        locations='seller_state',  # Используем правильное имя колонки
+        featureidkey='properties.sigla',
+        color='seller_count',  # Изменяем на существующую колонку
+        hover_name='seller_state',  # Используем правильное имя колонки
+        hover_data=['seller_count'],  # Изменяем на существующую колонку
+        title='Sales by State'
     )
 
-    return fig
+    map_fig.update_layout(
+        mapbox_style='carto-positron',
+        mapbox_zoom=3,
+        mapbox_center={'lat': -14.2350, 'lon': -51.9253},
+        template='plotly_dark',
+        paper_bgcolor='blue',  # Установка синего фона
+        margin={"r":0,"t":0,"l":0,"b":0}  # Настройка карты на всю ширину
+    )
+
+    return map_fig
 
 if __name__ == '__main__':
     app.run_server(debug=True)
