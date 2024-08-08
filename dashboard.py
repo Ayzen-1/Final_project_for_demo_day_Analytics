@@ -8,23 +8,16 @@ from datetime import datetime as dtime
 from etl import get_data
 import json
 
-# Загрузка данных
-tab1_df = get_data('get_v_qual')
-tab2_df = get_data('get_v_top_product')
 tab3_df = get_data('get_v_top_sel')
-tab4_df = get_data('get_v_qual_cat')
 tab5_df = get_data('get_v_top_state')
 
-# Преобразование столбца timestamp в datetime
 tab3_df['timestamp'] = pd.to_datetime(tab3_df['timestamp'])
 
-# Определение минимальной и максимальной даты
 min_date = tab3_df['timestamp'].min()
 max_date = tab3_df['timestamp'].max()
 years = tab3_df['timestamp'].dt.year.unique().tolist()
 regions = tab3_df['region'].sort_values().unique().tolist()
 
-# Определение блоков интерфейса
 date_picker_block = dcc.DatePickerRange(
     id='date_prange',
     min_date_allowed=min_date,
@@ -54,11 +47,9 @@ dropdown_block = dcc.Dropdown(
     style={'margin-top': '20px', 'width': '50%'}
 )
 
-# Загрузка локального GeoJSON файла
 with open('brazil-states.geojson', 'r') as f:
     brazil_states_geojson = json.load(f)
 
-# Определение дашборда
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
 
 app.layout = dbc.Container(
@@ -118,12 +109,12 @@ def update_line_plot(start_date, end_date, selected_country, click_data):
 
     if selected_country:
         country_filter = selected_country
-        sales = sales.query(f"seller_state == '{country_filter}'")
+        sales = sales[sales['seller_state'] == country_filter]
     if start_date and end_date:
         sales = sales[(sales['timestamp'] >= sdate) & (sales['timestamp'] <= edate)]
     if click_data:
         click_cat = click_data['points'][0]['customdata'][0]
-        sales = sales.query(f"monthkey == {click_cat}")
+        sales = sales[sales['monthkey'] == click_cat]
 
     sales_summary = sales.groupby(['timestamp'], as_index=False).agg({'orders': 'sum'})
 
@@ -155,7 +146,7 @@ def update_bar_plot(start_date, end_date, selected_country):
 
     if selected_country:
         country_filter = selected_country
-        tracks = tracks.query(f"seller_state == '{country_filter}'")
+        tracks = tracks[tracks['seller_state'] == country_filter]
     if start_date and end_date:
         tracks = tracks[(tracks['timestamp'] >= sdate) & (tracks['timestamp'] <= edate)]
 
@@ -166,7 +157,8 @@ def update_bar_plot(start_date, end_date, selected_country):
         x='monthkey',
         y='seller_id',
         title=f'Sold Tracks Count for {country_filter}',
-        labels={'seller_id': 'Count of Sold Tracks'}
+        labels={'seller_id': 'Count of Sold Tracks'},
+        custom_data=['monthkey']
     )
     
     bar_fig.update_layout(template='plotly_dark')
@@ -186,7 +178,6 @@ def update_table(start_date, end_date):
 
     filtered_df = tab3_df[(tab3_df['timestamp'] >= sdate) & (tab3_df['timestamp'] <= edate)]
 
-    # Преобразование DataFrame в таблицу Plotly
     table_fig = px.imshow(filtered_df.head(10), text_auto=True, title='Top 10 Entries')
 
     table_fig.update_layout(template='plotly_dark')
@@ -199,15 +190,14 @@ def update_table(start_date, end_date):
     Input('update_button', 'n_clicks')
 )
 def update_map(n_clicks):
-    # Создание карты с использованием данных о штатах Бразилии
     map_fig = px.choropleth_mapbox(
         tab5_df,
         geojson=brazil_states_geojson,
-        locations='seller_state',  # Используем правильное имя колонки
+        locations='seller_state',
         featureidkey='properties.sigla',
-        color='seller_count',  # Изменяем на существующую колонку
-        hover_name='seller_state',  # Используем правильное имя колонки
-        hover_data=['seller_count'],  # Изменяем на существующую колонку
+        color='seller_count',
+        hover_name='seller_state',
+        hover_data=['seller_count'],
         title='Sales by State'
     )
 
@@ -216,8 +206,8 @@ def update_map(n_clicks):
         mapbox_zoom=3,
         mapbox_center={'lat': -14.2350, 'lon': -51.9253},
         template='plotly_dark',
-        paper_bgcolor='blue',  # Установка синего фона
-        margin={"r":0,"t":0,"l":0,"b":0}  # Настройка карты на всю ширину
+        paper_bgcolor='blue',
+        margin={"r":0,"t":0,"l":0,"b":0}
     )
 
     return map_fig
