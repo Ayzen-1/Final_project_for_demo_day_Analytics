@@ -51,6 +51,7 @@ with open('brazil-states.geojson', 'r') as f:
     brazil_states_geojson = json.load(f)
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
+server = app.server
 
 app.layout = dbc.Container(
     [
